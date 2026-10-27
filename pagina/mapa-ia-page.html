@@ -1,0 +1,269 @@
+<main #root id="main-content" class="mp" [attr.aria-label]="c.ariaLabel">
+  <div class="no-print">
+    <app-page-header [title]="c.heading" [sub]="c.sub" [crumbs]="[{ label: 'Início', href: '/' }, { label: 'Mapa de IA', href: '/ferramentas/mapa-de-ia' }]" />
+  </div>
+
+  @switch (fase()) {
+    @case ('inicio') {
+      <section class="mp__section no-print" aria-label="Escolher como começar">
+        <div class="mp__inner">
+          <h2 #phaseHeading tabindex="-1" class="mp__sr">Como começar</h2>
+          <p class="mp__how">{{ c.how }}</p>
+          <div class="mp__actions">
+            <button type="button" class="mp__btn" (click)="verExemplo()">{{ c.start.exampleLabel }}</button>
+            <button type="button" class="mp__btn mp__btn--ghost" (click)="descreverMeu()">{{ c.start.ownLabel }}</button>
+          </div>
+        </div>
+      </section>
+    }
+
+    @case ('formulario') {
+      <section class="mp__section no-print" aria-label="Descrever o processo">
+        <div class="mp__inner">
+          <form class="mp__form" (submit)="$event.preventDefault(); revisar()" novalidate>
+            <h2 #phaseHeading tabindex="-1">{{ c.form.heading }}</h2>
+            <p class="mp__muted">{{ c.form.intro }}</p>
+
+            @if (errosLista().length) {
+              <div id="mapa-erros" class="mp__errors" role="alert" tabindex="-1">
+                <p>{{ c.form.errorsSummary }}</p>
+                <ul>@for (e of errosLista(); track $index) {<li>{{ e }}</li>}</ul>
+              </div>
+            }
+
+            <label class="mp__field">{{ c.form.processName }} <span class="mp__hint">({{ c.form.processNameHint }})</span>
+              <input type="text" maxlength="80" autocomplete="off" [value]="nome()" (input)="setNome($any($event.target).value)" [attr.aria-invalid]="erros()['processo.nome'] ? 'true' : null" />
+            </label>
+            <label class="mp__field">{{ c.form.people }} <span class="mp__hint">{{ c.form.peopleHint }}</span>
+              <input type="text" inputmode="numeric" autocomplete="off" class="mp__short" [value]="pessoas()" (input)="setPessoas($any($event.target).value)" [attr.aria-invalid]="erros()['processo.pessoas'] ? 'true' : null" />
+            </label>
+
+            <h3 class="mp__h3">{{ c.form.tasksHeading }}</h3>
+            <p class="mp__muted">{{ c.form.tasksHint }}</p>
+
+            @for (t of tarefas(); track t.id; let i = $index) {
+              <fieldset class="mp__task">
+                <legend>{{ fill(c.form.taskTitle, { n: i + 1 }) }}</legend>
+                <label class="mp__field">{{ c.form.fields.nome }}
+                  <input type="text" maxlength="80" autocomplete="off" [value]="t.nome" (input)="setTarefa(i, 'nome', $any($event.target).value)" [attr.aria-invalid]="erros()['tarefas.' + i + '.nome'] ? 'true' : null" />
+                </label>
+                <div class="mp__pair">
+                  <label class="mp__field">{{ c.form.fields.minutos }}
+                    <input type="text" inputmode="numeric" autocomplete="off" [value]="t.minutos" (input)="setTarefa(i, 'minutos', $any($event.target).value)" [attr.aria-invalid]="erros()['tarefas.' + i + '.minutosPorVez'] ? 'true' : null" />
+                  </label>
+                  <label class="mp__field">{{ c.form.fields.vezes }} <span class="mp__hint">{{ c.form.fields.vezesHint }}</span>
+                    <input type="text" inputmode="decimal" autocomplete="off" [value]="t.vezes" (input)="setTarefa(i, 'vezes', $any($event.target).value)" [attr.aria-invalid]="erros()['tarefas.' + i + '.vezesPorSemana'] ? 'true' : null" />
+                  </label>
+                </div>
+
+                @for (g of gruposClassificacao; track g.campo) {
+                  <fieldset class="mp__choices">
+                    <legend>{{ g.pergunta }}</legend>
+                    @for (o of g.opcoes; track o[0]) {
+                      <label class="mp__choice"><input type="radio" [name]="'t' + i + '-' + g.campo" [value]="o[0]" [checked]="$any(t)[g.campo] === o[0]" (change)="setTarefa(i, $any(g.campo), $any(o[0]))" /> <span>{{ o[1] }}</span></label>
+                    }
+                    @if (erros()['tarefas.' + i + '.' + g.campo]) {<p class="mp__error">{{ c.form.missingChoice }}</p>}
+                  </fieldset>
+                }
+
+                <label class="mp__choice mp__choice--check"><input type="checkbox" [checked]="t.dadosPessoais" (change)="setTarefa(i, 'dadosPessoais', $any($event.target).checked)" /> <span>{{ c.form.fields.dadosPessoais }}</span></label>
+
+                <fieldset class="mp__choices">
+                  <legend>{{ grupoErro.pergunta }}</legend>
+                  @for (o of grupoErro.opcoes; track o[0]) {
+                    <label class="mp__choice"><input type="radio" [name]="'t' + i + '-custoErro'" [value]="o[0]" [checked]="t.custoErro === o[0]" (change)="setTarefa(i, 'custoErro', $any(o[0]))" /> <span>{{ o[1] }}</span></label>
+                  }
+                  @if (erros()['tarefas.' + i + '.custoErro']) {<p class="mp__error">{{ c.form.missingChoice }}</p>}
+                </fieldset>
+
+                @if (tarefas().length > 1) {
+                  <button type="button" class="mp__link" (click)="removerTarefa(i)">{{ fill(c.form.removeTask, { n: i + 1 }) }}</button>
+                }
+              </fieldset>
+            }
+
+            <div class="mp__actions">
+              <button type="button" class="mp__btn mp__btn--ghost" [disabled]="tarefas().length >= maxTarefas" (click)="adicionarTarefa()">{{ c.form.addTask }}</button>
+              <button type="submit" class="mp__btn">{{ c.form.review }}</button>
+            </div>
+            @if (tarefas().length >= maxTarefas) {<p class="mp__muted">{{ c.form.maxTasks }}</p>}
+          </form>
+        </div>
+      </section>
+    }
+
+    @case ('revisao') {
+      @if (confirmado(); as p) {
+        <section class="mp__section no-print" aria-label="Revisar">
+          <div class="mp__inner">
+            <h2 #phaseHeading tabindex="-1">{{ c.review.heading }}</h2>
+            <p class="mp__muted">{{ c.review.intro }}</p>
+            <p><strong>{{ p.nome }}</strong>: {{ p.pessoas }} {{ p.pessoas === 1 ? 'pessoa' : 'pessoas' }}</p>
+            <ol class="mp__review">
+              @for (t of p.tarefas; track t.id) {
+                <li>
+                  <strong>{{ t.nome }}</strong>: {{ t.minutosPorVez }} {{ c.review.minutes }}, {{ formatarNumero(t.vezesPorSemana) }} {{ c.review.times }}.
+                  <span class="mp__muted">{{ rotulos.repeticao[t.repeticao] }} · {{ rotulos.regra[t.regra] }} · {{ rotulos.julgamento[t.julgamento] }} · Dados de terceiros: {{ t.dadosPessoais ? 'sim' : 'não' }} · Dano do erro: {{ rotulos.custoErro[t.custoErro] }}</span>
+                </li>
+              }
+            </ol>
+            <p class="mp__muted">{{ c.review.nothingYet }}</p>
+            <div class="mp__actions">
+              <button type="button" class="mp__btn" (click)="confirmar()">{{ c.review.confirm }}</button>
+              <button type="button" class="mp__btn mp__btn--ghost" (click)="voltar()">{{ c.review.edit }}</button>
+            </div>
+          </div>
+        </section>
+      }
+    }
+
+    @case ('resultado') {
+      @if (relatorio(); as r) {
+        <section class="mp__section mp__result" aria-label="Resultado">
+          <div class="mp__inner">
+            <div class="mp__print-head" aria-hidden="true">
+              <p class="mp__print-title">{{ c.print.title }}</p>
+              <p>{{ r.processo }} · {{ fill(c.print.generatedOn, { data: hoje() }) }}</p>
+              <p class="mp__print-legend">{{ c.print.legend }}</p>
+            </div>
+
+            @if (exemplo()) {<p class="mp__badge">{{ c.start.exampleNote }}</p>}
+            <h2 #phaseHeading tabindex="-1" class="mp__result-title">{{ c.result.heading }}: {{ r.processo }}</h2>
+            <p class="mp__muted no-print">{{ c.result.intro }}</p>
+
+            <div class="mp__actions no-print">
+              <button type="button" class="mp__btn" (click)="imprimir()">{{ c.result.pdfLabel }}</button>
+              <button type="button" class="mp__btn mp__btn--ghost" (click)="copiar()">{{ copiado() ? c.result.copiedLabel : c.result.copyLabel }}</button>
+              <button type="button" class="mp__link" (click)="recomecar()">{{ c.result.restart }}</button>
+            </div>
+
+            <h3 class="mp__h3">{{ c.result.totalsHeading }}</h3>
+            <div class="mp__grid">
+              @for (n of [r.totais.minutosSemana, r.totais.economiaSemana, r.totais.economiaMes]; track n.label) {
+                <app-explainable-number [label]="n.label" [value]="n.value" [formula]="n.formula" [inputs]="n.inputs" [fonte]="n.fonte" [origem]="n.origem" />
+              }
+            </div>
+
+            <h3 class="mp__h3">{{ c.result.classesHeading }}</h3>
+            <ul class="mp__classes">
+              @for (cl of classes; track cl) {
+                <li class="mp__class">
+                  <p class="mp__class-count">{{ r.contagem[cl] }}</p>
+                  <p class="mp__class-name">{{ classeRotulo[cl] }}</p>
+                  <p class="mp__muted">{{ classeExplicacao[cl] }}</p>
+                </li>
+              }
+            </ul>
+
+            <h3 class="mp__h3">{{ c.result.tasksHeading }}</h3>
+            <ol class="mp__tasks">
+              @for (t of r.tarefas; track t.id; let i = $index) {
+                <li class="mp__tasks-item">
+                  <div class="mp__tasks-head">
+                    <p class="mp__tasks-name">{{ t.nome }}</p>
+                    <p class="mp__tasks-class mp__tasks-class--{{ t.classe }}">{{ classeRotulo[t.classe] }} <span class="mp__origin">{{ t.origemClasse === 'usuario' ? 'Você' : 'Regra ' + t.regraAplicada }}</span></p>
+                  </div>
+                  <p class="mp__muted">{{ c.result.why }}: {{ t.porque.join('; ') }}.</p>
+                  <p class="mp__tasks-nums">Tempo por semana: <strong>{{ t.minutosSemana.value }}</strong> · Economia estimada: <strong>{{ t.economiaSemana.value }}</strong></p>
+                  <label class="mp__field mp__field--inline no-print">{{ c.result.classChange }}
+                    <select [attr.aria-label]="c.result.classChange + ': ' + t.nome" (change)="setClasse(t.id, $any($event.target).value)">
+                      @for (cl of classes; track cl) {<option [value]="cl" [selected]="t.classe === cl">{{ classeRotulo[cl] }}</option>}
+                    </select>
+                  </label>
+                  @if (t.riscos.length) {
+                    <p class="mp__risk-title">{{ c.result.riskHeading }}</p>
+                    <ul class="mp__risks">@for (x of t.riscos; track $index) {<li>{{ x }}</li>}</ul>
+                  }
+                </li>
+              }
+            </ol>
+
+            <div class="mp__page2">
+              <div class="mp__risks-print">
+                <h3 class="mp__h3">{{ c.result.riskHeading }}</h3>
+                @for (t of r.tarefas; track t.id) {
+                  @if (t.riscos.length) {<p><strong>{{ t.nome }}:</strong> {{ t.riscos.join(' ') }}</p>}
+                }
+                @for (x of r.riscosGerais; track $index) {<p>{{ x }}</p>}
+              </div>
+              @if (r.riscosGerais.length) {
+                <div class="no-print">
+                  <h3 class="mp__h3">{{ c.result.generalRisksHeading }}</h3>
+                  <ul class="mp__risks">@for (x of r.riscosGerais; track $index) {<li>{{ x }}</li>}</ul>
+                </div>
+              }
+
+              <h3 class="mp__h3">{{ c.result.factorsHeading }}</h3>
+              <p class="mp__muted no-print">{{ c.result.factorsIntro }}</p>
+              <div class="mp__factors no-print">
+                @for (cl of classes; track cl) {
+                  <label class="mp__field">{{ c.result.factorLabel }} “{{ classeRotulo[cl] }}” <span class="mp__hint">({{ c.result.factorHint }}; ponto de partida: {{ padrao(cl) }})</span>
+                    <input type="text" inputmode="decimal" autocomplete="off" class="mp__short" [placeholder]="padrao(cl)" [value]="fatoresTexto()[cl]" (input)="setFator(cl, $any($event.target).value)" [attr.aria-invalid]="fatorInvalido(cl) ? 'true' : null" />
+                    @if (fatorInvalido(cl)) {<span class="mp__error">{{ c.result.factorInvalid }}</span>}
+                  </label>
+                }
+              </div>
+              <ul class="mp__factors-print">
+                @for (cl of classes; track cl) {<li>{{ classeRotulo[cl] }}: {{ formatarPercentual(r.fatores[cl].valor) }} <span class="mp__origin">{{ r.fatores[cl].origem === 'usuario' ? 'Você' : 'Regra' }}</span></li>}
+              </ul>
+
+              <h3 class="mp__h3">{{ c.result.howWeCount }}</h3>
+              <ul class="mp__formulas">
+                <li>Tempo por semana = {{ r.totais.minutosSemana.formula }}.</li>
+                <li>Economia por semana = {{ r.tarefas[0].economiaSemana.formula }}.</li>
+                <li>Economia por mês = {{ r.totais.economiaMes.formula }}.</li>
+              </ul>
+
+              <details class="mp__details no-print">
+                <summary>{{ c.result.rulesSummary }}</summary>
+                <p class="mp__muted">{{ c.result.rulesIntro }}</p>
+                <ng-container *ngTemplateOutlet="rulesList" />
+              </details>
+              <div class="mp__rules-print"><ng-container *ngTemplateOutlet="rulesList" /></div>
+
+              <h3 class="mp__h3">{{ c.limits.heading }}</h3>
+              <ul class="mp__avisos">
+                @for (a of r.avisos; track $index) {<li>{{ a }}</li>}
+                @for (l of c.limits.items; track $index) {<li>{{ l }}</li>}
+              </ul>
+            </div>
+          </div>
+        </section>
+      }
+    }
+  }
+
+  <ng-template #rulesList>
+    <ol class="mp__rules">
+      @for (r of regrasTexto; track r.id) {<li><strong>{{ r.id }}</strong>: {{ r.quando }} → <strong>{{ classeRotulo[r.resultado] }}</strong></li>}
+    </ol>
+  </ng-template>
+
+  <section class="mp__section mp__section--alt no-print" aria-labelledby="mp-verify-title">
+    <div class="mp__inner">
+      <h2 id="mp-verify-title">{{ c.verify.heading }}</h2>
+      <ul class="mp__avisos">
+        <li>{{ c.verify.offline }}</li>
+        <li>{{ c.verify.noThirdParty }}</li>
+        <li>{{ c.verify.nothingLeaves }}</li>
+        @if (sourceUrl) {<li>{{ c.verify.openCode }} <a [href]="sourceUrl" rel="noopener">{{ c.verify.openCodeLink }}</a>.</li>}
+      </ul>
+    </div>
+  </section>
+
+  <section class="mp__section no-print">
+    <div class="mp__inner"><app-privacy-panel noneText="O que você descreveu ficou aqui, no seu navegador, e não foi enviado para ninguém." /></div>
+  </section>
+
+  <div class="no-print" (click)="onCtaClick($event)">
+    <app-cta-section
+      [headline]="c.cta.headline"
+      [subheadline]="c.cta.subheadline ?? ''"
+      [ctaLabel]="c.cta.ctaLabel"
+      [ctaLink]="c.cta.ctaLink"
+      [ctaSecondaryLabel]="c.cta.ctaSecondaryLabel ?? ''"
+      [ctaSecondaryLink]="c.cta.ctaSecondaryLink ?? ''"
+      variant="dark"
+    />
+  </div>
+</main>

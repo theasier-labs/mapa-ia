@@ -1,0 +1,16 @@
+{
+  "name": "mapa-ia",
+  "version": "0.1.0",
+  "description": "Mapa de IA no seu processo: o código que classifica as tarefas de um processo e calcula as horas, no navegador, sem enviar nada.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test": "node --import tsx node_modules/jasmine/bin/jasmine.js --config=jasmine.json",
+    "test:seguranca": "node --test seguranca/tool-csp.test.mjs scripts/sem-rede.test.mjs"
+  },
+  "devDependencies": {
+    "@types/jasmine": "~5.1.0",
+    "jasmine": "^5.8.0",
+    "tsx": "^4.19.0"
+  }
+}
